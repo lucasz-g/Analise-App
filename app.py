@@ -1,6 +1,6 @@
-from flask import Flask, request, render_template, send_file
+from flask import Flask, request, render_template, send_file, redirect, url_for
 import pandas as pd
-from pandas_profiling import ProfileReport
+from ydata_profiling import ProfileReport
 import os
 
 app = Flask(__name__)
@@ -12,33 +12,40 @@ os.makedirs(REPORT_FOLDER, exist_ok=True)
 
 @app.route('/')
 def home():
-    return render_template('./index.html') # Interface frontend
+    return render_template('./index.html')
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    file = request.files['file']
-    file_format = request.form['format']  # csv, excel, json
+    try:
+        file = request.files['file']
+        file_format = request.form['format']
 
-    # Salvar o arquivo enviado
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(file_path)
+        file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(file_path)
 
-    # Ler o arquivo para um DataFrame
-    if file_format == 'csv':
-        df = pd.read_csv(file_path)
-    elif file_format == 'excel':
-        df = pd.read_excel(file_path)
-    elif file_format == 'json':
-        df = pd.read_json(file_path)
-    else:
-        return "Formato não suportado", 400
+        if file_format == 'csv':
+            df = pd.read_csv(file_path)
+        elif file_format == 'excel':
+            df = pd.read_excel(file_path)
+        elif file_format == 'json':
+            df = pd.read_json(file_path)
+        else:
+            return "Formato não suportado", 400
 
-    # Gerar o relatório de Pandas Profiling
-    profile = ProfileReport(df, title="Análise Exploratória", explorative=True)
+        profile = ProfileReport(df, title="Análise Exploratória", explorative=True)
+        report_path = os.path.join(REPORT_FOLDER, 'report.html')
+        profile.to_file(report_path)
+
+        return redirect(url_for('view_report'))
+
+    except Exception as e:
+        return f"Ocorreu um erro: {str(e)}", 500
+
+@app.route('/view_report')
+def view_report():
     report_path = os.path.join(REPORT_FOLDER, 'report.html')
-    profile.to_file(report_path)
-
-    return send_file(report_path, as_attachment=True)  # Download do relatório
+    # Enviar o arquivo diretamente como uma resposta HTTP para ser exibido em uma nova guia
+    return send_file(report_path)
 
 if __name__ == '__main__':
     app.run(debug=True)
